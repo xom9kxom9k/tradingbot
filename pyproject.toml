@@ -79,7 +79,10 @@ ignore = [
 "dashboard/*" = ["E402"]
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12 rather than 3.11: numpy ships stubs that use PEP 695 `type` statements,
+# which mypy only parses when told to target 3.12+. The package itself stays
+# 3.11-compatible, and ruff enforces that via target-version = "py311".
+python_version = "3.12"
 strict = true
 warn_unreachable = true
 show_error_codes = true
