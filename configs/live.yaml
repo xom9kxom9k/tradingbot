@@ -1,0 +1,19 @@
+# Live profile: overrides base.yaml for the running bot.
+
+exchange:
+  symbols: [BTC/USDT, ETH/USDT, SOL/USDT]
+  timeframe: 4h
+
+live:
+  mode: paper               # paper | signal_only
+  poll_interval_sec: 30
+  bar_close_grace_sec: 10
+  state_db: data/state.db
+
+notify:
+  telegram_enabled: true
+  daily_report_utc: "09:00"
+  notify_rejected_signals: false
+
+logging:
+  level: INFO

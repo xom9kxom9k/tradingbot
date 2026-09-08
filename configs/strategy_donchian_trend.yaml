@@ -1,0 +1,20 @@
+# Donchian trend breakout - default parameters (tech.md section 7.3).
+
+strategy:
+  name: donchian_trend
+  params:
+    entry_channel: 20        # channel period used for entries
+    exit_channel: 10         # channel period used for the reversal exit
+    trend_fast: 50           # fast EMA of the regime filter
+    trend_slow: 200          # slow EMA of the regime filter
+    atr_period: 14
+    adx_period: 14
+    adx_min: 20.0            # minimum trend strength required to enter
+    atr_stop_mult: 2.5       # initial stop distance, in ATR
+    atr_trail_mult: 3.0      # chandelier trailing stop distance, in ATR
+    breakeven_at_r: 1.0      # move the stop to breakeven once +1R is reached
+    take_profit_r: [2.0]     # partial exit levels, in R
+    take_profit_fraction: 0.5
+    min_atr_pct: 0.005       # skip dead markets
+    max_atr_pct: 0.12        # skip extreme volatility
+    cooldown_bars: 3         # bars to wait after an exit before re-entering

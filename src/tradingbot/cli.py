@@ -7,9 +7,25 @@ for the running bot.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Annotated
+
 import typer
+import yaml
 
 from tradingbot import __version__
+from tradingbot.config import AppConfig, load_config
+from tradingbot.core.exceptions import TradingBotError
+from tradingbot.core.logging import setup_logging
+
+ConfigOption = Annotated[
+    list[Path] | None,
+    typer.Option(
+        "--config",
+        "-c",
+        help="YAML config file; repeat to layer several files (later wins).",
+    ),
+]
 
 app = typer.Typer(
     name="tradingbot",
@@ -37,10 +53,38 @@ app.add_typer(telegram_app, name="telegram")
 app.add_typer(config_app, name="config")
 
 
+def build_config(paths: list[Path] | None, *, quiet: bool = False) -> AppConfig:
+    """Load the effective config and install logging, or exit with a clear message.
+
+    Args:
+        paths: Config files supplied on the command line, if any.
+        quiet: Keep the console sink silent (used by commands that print data).
+
+    Returns:
+        The validated configuration.
+    """
+    try:
+        config = load_config(paths or None)
+    except TradingBotError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    setup_logging(config.logging, console=not quiet)
+    return config
+
+
 @app.command()
 def version() -> None:
     """Print the package version."""
     typer.echo(__version__)
+
+
+@config_app.command("show")
+def config_show(config: ConfigOption = None) -> None:
+    """Print the effective configuration after merging YAML, env and defaults."""
+    effective = build_config(config, quiet=True)
+    typer.echo(
+        yaml.safe_dump(effective.to_yaml_dict(), sort_keys=False, allow_unicode=True).rstrip()
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

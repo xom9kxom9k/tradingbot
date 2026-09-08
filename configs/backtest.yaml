@@ -1,0 +1,19 @@
+# Backtest profile: overrides base.yaml for historical simulation runs.
+
+data:
+  start: "2019-01-01"
+  end: null
+
+backtest:
+  initial_capital: 10000
+  currency: USDT
+  seed: 42
+  runs_dir: runs
+
+costs:
+  taker_fee: 0.0005
+  maker_fee: 0.0002
+  slippage_model: atr
+  slippage_atr_mult: 0.05
+  funding_rate_8h: 0.0001
+  apply_funding: true

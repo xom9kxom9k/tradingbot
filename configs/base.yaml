@@ -1,0 +1,57 @@
+# Common settings shared by every entry point.
+# Secrets never belong here - see .env.example.
+
+exchange:
+  name: binanceusdm
+  symbols: [BTC/USDT, ETH/USDT, SOL/USDT, BNB/USDT, XRP/USDT]
+  timeframe: 4h
+
+data:
+  start: "2019-01-01"
+  end: null                 # null = up to now
+  cache_dir: data/ohlcv
+  max_gap_bars: 3
+
+backtest:
+  initial_capital: 10000
+  currency: USDT
+  seed: 42
+  runs_dir: runs
+
+costs:
+  taker_fee: 0.0005
+  maker_fee: 0.0002
+  slippage_model: atr
+  slippage_bps: 5
+  slippage_atr_mult: 0.05
+  slippage_percent: 0.0005
+  funding_rate_8h: 0.0001
+  apply_funding: true
+
+risk:
+  risk_per_trade_pct: 0.01
+  max_concurrent_positions: 3
+  max_positions_per_side: 3
+  max_notional_pct: 0.35
+  max_portfolio_risk_pct: 0.03
+  daily_loss_limit_pct: 0.05
+  max_drawdown_stop_pct: 0.25
+
+live:
+  mode: paper               # paper | signal_only
+  poll_interval_sec: 30
+  bar_close_grace_sec: 10
+  state_db: data/state.db
+
+notify:
+  telegram_enabled: true
+  daily_report_utc: "09:00"
+  notify_rejected_signals: false
+  max_messages_per_minute: 20
+
+logging:
+  level: INFO
+  file: logs/tradingbot.log
+  json_file: logs/tradingbot.jsonl
+  rotation: 10 MB
+  retention: 14 days
