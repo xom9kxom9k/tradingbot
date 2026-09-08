@@ -1,0 +1,33 @@
+# Environment
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Project data (never committed)
+data/
+runs/
+logs/
+*.parquet
+*.db
+*.sqlite3
+
+# Local tooling helpers
+scripts/commit.sh
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
