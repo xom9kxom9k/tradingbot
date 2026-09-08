@@ -15,6 +15,7 @@ import typer
 import yaml
 
 from tradingbot import __version__
+from tradingbot.backtest import BacktestRunner, list_runs, run_summary
 from tradingbot.config import AppConfig, load_config
 from tradingbot.core.exceptions import TradingBotError
 from tradingbot.core.logging import setup_logging
@@ -157,6 +158,35 @@ def data_validate(
         failed = failed or not report.is_valid
     if failed:
         raise typer.Exit(code=1)
+
+
+@backtest_app.command("run")
+def backtest_run(
+    config: ConfigOption = None,
+    symbols: SymbolsOption = None,
+    note: Annotated[str, typer.Option("--note", help="Free-form label stored in meta.json.")] = "",
+) -> None:
+    """Run a backtest over the cached data and store the artefacts."""
+    effective = build_config(config)
+    runner = BacktestRunner(effective)
+    try:
+        stored = runner.run(_selected_symbols(effective, symbols) if symbols else None, note=note)
+    except TradingBotError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(run_summary(stored))
+
+
+@backtest_app.command("list")
+def backtest_list(config: ConfigOption = None) -> None:
+    """List stored runs, newest first."""
+    effective = build_config(config, quiet=True)
+    runs = list_runs(effective.backtest.runs_dir)
+    if not runs:
+        typer.echo("no runs stored yet")
+        return
+    for run_id in runs:
+        typer.echo(run_id)
 
 
 @data_app.command("info")

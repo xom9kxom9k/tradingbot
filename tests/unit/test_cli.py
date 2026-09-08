@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import yaml
 from typer.testing import CliRunner
 
 from tradingbot import __version__
@@ -21,3 +24,35 @@ def test_version_command() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
     assert __version__ in result.stdout
+
+
+def config_file(tmp_path: Path) -> Path:
+    """A minimal config pointing every output at ``tmp_path``."""
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "exchange": {"symbols": ["BTC/USDT"], "timeframe": "4h"},
+                "data": {"cache_dir": str(tmp_path / "cache")},
+                "backtest": {"runs_dir": str(tmp_path / "runs")},
+                "logging": {
+                    "file": str(tmp_path / "log.txt"),
+                    "json_file": str(tmp_path / "log.jsonl"),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_backtest_run_without_data_explains_itself(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["backtest", "run", "--config", str(config_file(tmp_path))])
+    assert result.exit_code == 1
+    assert "data download" in result.output
+
+
+def test_backtest_list_is_empty_before_any_run(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["backtest", "list", "--config", str(config_file(tmp_path))])
+    assert result.exit_code == 0
+    assert "no runs stored yet" in result.stdout

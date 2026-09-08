@@ -104,6 +104,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "integration: tests that hit the network or external services (excluded from CI)",
+    "slow: performance checks measured in seconds rather than milliseconds",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
 

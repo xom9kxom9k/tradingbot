@@ -223,7 +223,9 @@ class Position(MutableDomainModel):
     side: Side
     entry_ts: datetime
     entry_price: float = Field(gt=0)
-    size: float = Field(gt=0)
+    # Remaining size reaches zero on the final partial exit, just before the
+    # position is retired, so it cannot carry a strict positivity constraint.
+    size: float = Field(ge=0)
     initial_size: float = Field(gt=0)
     initial_stop: float = Field(gt=0)
     current_stop: float = Field(gt=0)
@@ -347,6 +349,24 @@ class RegimeSnapshot:
 
     regime: Regime
     values: dict[str, float] = field(default_factory=dict)
+
+
+TRADE_ID_NAMESPACE = uuid.UUID("6f2b1c8e-0a7d-5f3b-9c14-2d8e7a4b1f60")
+
+
+def deterministic_trade_id(
+    symbol: str,
+    side: Side,
+    entry_ts: datetime,
+    exit_ts: datetime,
+) -> str:
+    """Stable identifier for a closed trade.
+
+    A random UUID would make two identical backtests produce different files,
+    which would defeat the reproducibility requirement of FR-3.6.
+    """
+    key = f"{symbol}|{side.value}|{entry_ts.isoformat()}|{exit_ts.isoformat()}"
+    return str(uuid.uuid5(TRADE_ID_NAMESPACE, key))
 
 
 def config_hash(config: dict[str, Any], length: int = 8) -> str:

@@ -74,28 +74,36 @@ class DonchianTrendStrategy(Strategy):
         self,
         params: DonchianTrendParams | None = None,
         risk_per_trade_pct: float = 0.01,
+        fee_buffer_pct: float = 0.0,
     ) -> None:
         self.params = params or DonchianTrendParams()
         self.risk_per_trade_pct = risk_per_trade_pct
+        self.fee_buffer_pct = fee_buffer_pct
 
     @classmethod
     def from_params(
         cls,
         params: dict[str, Any] | None = None,
         risk_per_trade_pct: float = 0.01,
+        fee_buffer_pct: float = 0.0,
     ) -> DonchianTrendStrategy:
         """Build the strategy from a raw configuration mapping."""
         try:
             validated = DonchianTrendParams.model_validate(params or {})
         except ValueError as exc:
             raise ConfigError(f"invalid parameters for {cls.name}: {exc}") from exc
-        return cls(validated, risk_per_trade_pct=risk_per_trade_pct)
+        return cls(
+            validated,
+            risk_per_trade_pct=risk_per_trade_pct,
+            fee_buffer_pct=fee_buffer_pct,
+        )
 
     def describe(self) -> dict[str, Any]:
         """Full parameter snapshot, stored in run metadata."""
         return {
             "name": self.name,
             "risk_per_trade_pct": self.risk_per_trade_pct,
+            "fee_buffer_pct": self.fee_buffer_pct,
             **self.params.model_dump(),
         }
 
@@ -163,7 +171,9 @@ class DonchianTrendStrategy(Strategy):
             not position.breakeven_moved
             and position.excursion_r(float(row["close"])) >= self.params.breakeven_at_r
         ):
-            candidate = position.entry_price
+            # Breakeven means "no loss after costs", so the level sits a round
+            # trip of fees beyond the entry price.
+            candidate = position.entry_price * (1.0 + self.fee_buffer_pct * position.side.sign)
 
         if candidate is None:
             return None
