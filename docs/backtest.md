@@ -55,6 +55,14 @@ Each run writes `runs/<run_id>/`:
 | `equity.parquet` | Balance, equity, open position count and drawdown per bar |
 | `signals.parquet` | Every signal, including rejected ones and why |
 | `metrics.json` | The full metric set of section 9.1 |
+| `report.html` | Standalone interactive report (built by `tradingbot backtest report`) |
+| `charts/*.png` | Key figures rendered with kaleido, optional (`--png`) |
+
+`tradingbot backtest report --run-id …` writes `report.html`. It inlines Plotly, so
+the file opens in a browser with no server. Trade markers on the price chart are
+taken from `trades.parquet`: a long entry is a triangle-up at `entry_ts`, a short
+entry a triangle-down, an exit a cross. Walk-forward, Monte Carlo and the
+parameter heatmap are honest placeholders until those stages produce artefacts.
 
 Slippage is the one cost that the trade schema has no column for, so the engine
 tallies what it actually cost across all fills and reports it at run level. On a

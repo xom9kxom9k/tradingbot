@@ -16,11 +16,20 @@ import typer
 import yaml
 
 from tradingbot import __version__
-from tradingbot.backtest import BacktestRunner, latest_run_id, list_runs, load_run, run_summary
+from tradingbot.backtest import (
+    BacktestRunner,
+    StoredRun,
+    latest_run_id,
+    list_runs,
+    load_run,
+    run_summary,
+)
 from tradingbot.config import AppConfig, load_config
 from tradingbot.core.exceptions import TradingBotError
 from tradingbot.core.logging import setup_logging
 from tradingbot.data import CcxtDataFeed, ParquetCache, validate_ohlcv
+from tradingbot.reporting.html_report import write_report
+from tradingbot.reporting.png_export import PngExportError, export_pngs, kaleido_available
 
 ConfigOption = Annotated[
     list[Path] | None,
@@ -189,26 +198,53 @@ def backtest_metrics(
 ) -> None:
     """Show the metrics of a stored run."""
     effective = build_config(config, quiet=True)
-    runs_dir = effective.backtest.runs_dir
-    target = run_id or latest_run_id(runs_dir)
-    if target is None:
-        typer.secho(f"no runs found in {runs_dir}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1)
-
-    try:
-        stored = load_run(target, runs_dir)
-    except TradingBotError as exc:
-        typer.secho(str(exc), fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-
+    stored = _load_stored_run(effective, run_id)
     if not stored.metrics:
-        typer.secho(f"run {target} has no metrics.json", fg=typer.colors.RED, err=True)
+        typer.secho(f"run {stored.run_id} has no metrics.json", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
 
     if as_json:
         typer.echo(json.dumps(stored.metrics, indent=2, sort_keys=True, default=str))
         return
     typer.echo(run_summary(stored))
+
+
+@backtest_app.command("report")
+def backtest_report(
+    config: ConfigOption = None,
+    run_id: Annotated[
+        str | None,
+        typer.Option("--run-id", help="Run to report on; defaults to the most recent one."),
+    ] = None,
+    open_browser: Annotated[
+        bool, typer.Option("--open", help="Open the report in the default browser.")
+    ] = False,
+    png: Annotated[
+        bool, typer.Option("--png", help="Also export the key charts as PNG files.")
+    ] = False,
+) -> None:
+    """Build a standalone report.html for a stored run."""
+    effective = build_config(config)
+    stored = _load_stored_run(effective, run_id)
+    path = write_report(stored)
+    typer.echo(f"report {path}")
+    if png:
+        from tradingbot.reporting.html_report import charts_for_run
+
+        if not kaleido_available():
+            typer.secho("kaleido is not installed; skipping PNG export", fg=typer.colors.YELLOW)
+        else:
+            try:
+                written = export_pngs(charts_for_run(stored), stored.path / "charts")
+            except PngExportError as exc:
+                typer.secho(str(exc), fg=typer.colors.YELLOW)
+            else:
+                for file in written:
+                    typer.echo(f"png {file}")
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(path.resolve().as_uri())
 
 
 @backtest_app.command("list")
@@ -240,6 +276,20 @@ def data_info(config: ConfigOption = None, timeframe: TimeframeOption = None) ->
             f"{frame.index[0]:%Y-%m-%d} .. {frame.index[-1]:%Y-%m-%d %H:%M} UTC, "
             f"hash {cache.fingerprint(symbol, candle)}"
         )
+
+
+def _load_stored_run(config: AppConfig, run_id: str | None) -> StoredRun:
+    """Resolve ``run_id`` (or the latest run) and load it, or exit with a message."""
+    runs_dir = config.backtest.runs_dir
+    target = run_id or latest_run_id(runs_dir)
+    if target is None:
+        typer.secho(f"no runs found in {runs_dir}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    try:
+        return load_run(target, runs_dir)
+    except TradingBotError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
 
 
 if __name__ == "__main__":  # pragma: no cover
