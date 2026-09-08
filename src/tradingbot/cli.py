@@ -7,6 +7,7 @@ for the running bot.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -17,6 +18,7 @@ from tradingbot import __version__
 from tradingbot.config import AppConfig, load_config
 from tradingbot.core.exceptions import TradingBotError
 from tradingbot.core.logging import setup_logging
+from tradingbot.data import CcxtDataFeed, ParquetCache, validate_ohlcv
 
 ConfigOption = Annotated[
     list[Path] | None,
@@ -85,6 +87,95 @@ def config_show(config: ConfigOption = None) -> None:
     typer.echo(
         yaml.safe_dump(effective.to_yaml_dict(), sort_keys=False, allow_unicode=True).rstrip()
     )
+
+
+SymbolsOption = Annotated[
+    str | None,
+    typer.Option("--symbols", help="Comma-separated symbols; defaults to the configured list."),
+]
+TimeframeOption = Annotated[
+    str | None,
+    typer.Option("--timeframe", help="Candle size; defaults to the configured one."),
+]
+
+
+def _selected_symbols(config: AppConfig, symbols: str | None) -> list[str]:
+    """Resolve the symbol list from the CLI flag, falling back to the config."""
+    if not symbols:
+        return list(config.exchange.symbols)
+    return [item.strip() for item in symbols.split(",") if item.strip()]
+
+
+@data_app.command("download")
+def data_download(
+    config: ConfigOption = None,
+    symbols: SymbolsOption = None,
+    timeframe: TimeframeOption = None,
+    start: Annotated[
+        str | None, typer.Option("--start", help="First candle, e.g. 2019-01-01.")
+    ] = None,
+) -> None:
+    """Download missing candles into the local Parquet cache."""
+    effective = build_config(config)
+    selected = _selected_symbols(effective, symbols)
+    candle = timeframe or effective.exchange.timeframe
+    begin = datetime.fromisoformat(start).replace(tzinfo=UTC) if start else effective.data.start
+
+    cache = ParquetCache(effective.data.cache_dir, effective.exchange.name)
+    with CcxtDataFeed(effective.exchange.name) as feed:
+        for symbol in selected:
+            try:
+                result = cache.sync(feed, symbol, candle, begin, effective.data.end)
+            except TradingBotError as exc:
+                typer.secho(f"{symbol}: {exc}", fg=typer.colors.RED, err=True)
+                continue
+            typer.echo(
+                f"{symbol} {candle}: {result.total} bars (+{result.added} new) -> {result.path}"
+            )
+
+
+@data_app.command("validate")
+def data_validate(
+    config: ConfigOption = None,
+    symbols: SymbolsOption = None,
+    timeframe: TimeframeOption = None,
+) -> None:
+    """Check cached data against the quality rules and print a report."""
+    effective = build_config(config, quiet=True)
+    candle = timeframe or effective.exchange.timeframe
+    cache = ParquetCache(effective.data.cache_dir, effective.exchange.name)
+
+    failed = False
+    for symbol in _selected_symbols(effective, symbols):
+        report = validate_ohlcv(
+            cache.read(symbol, candle),
+            symbol,
+            candle,
+            max_gap_bars=effective.data.max_gap_bars,
+        )
+        typer.echo(report.render())
+        failed = failed or not report.is_valid
+    if failed:
+        raise typer.Exit(code=1)
+
+
+@data_app.command("info")
+def data_info(config: ConfigOption = None, timeframe: TimeframeOption = None) -> None:
+    """List what is currently cached for each configured symbol."""
+    effective = build_config(config, quiet=True)
+    candle = timeframe or effective.exchange.timeframe
+    cache = ParquetCache(effective.data.cache_dir, effective.exchange.name)
+
+    for symbol in effective.exchange.symbols:
+        frame = cache.read(symbol, candle)
+        if frame.empty:
+            typer.echo(f"{symbol} {candle}: not cached")
+            continue
+        typer.echo(
+            f"{symbol} {candle}: {len(frame)} bars, "
+            f"{frame.index[0]:%Y-%m-%d} .. {frame.index[-1]:%Y-%m-%d %H:%M} UTC, "
+            f"hash {cache.fingerprint(symbol, candle)}"
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

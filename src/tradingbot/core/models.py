@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -79,6 +80,34 @@ class Bar(DomainModel):
     def range(self) -> float:
         """High minus low."""
         return self.high - self.low
+
+
+class MarketMeta(DomainModel):
+    """Instrument trading rules that constrain order prices and sizes."""
+
+    symbol: str
+    price_tick: float = Field(default=0.01, gt=0)
+    lot_step: float = Field(default=1e-8, gt=0)
+    min_size: float = Field(default=0.0, ge=0)
+    min_notional: float = Field(default=0.0, ge=0)
+
+    @classmethod
+    def permissive(cls, symbol: str) -> MarketMeta:
+        """Fallback metadata used when the exchange does not expose limits."""
+        return cls(symbol=symbol)
+
+    def round_price(self, price: float) -> float:
+        """Snap ``price`` to the instrument tick size."""
+        return round(round(price / self.price_tick) * self.price_tick, 10)
+
+    def round_size(self, size: float) -> float:
+        """Floor ``size`` to the lot step; never rounds up into extra risk."""
+        steps = math.floor(size / self.lot_step + 1e-9)
+        return round(max(steps, 0) * self.lot_step, 10)
+
+    def is_tradable(self, size: float, price: float) -> bool:
+        """True when ``size`` clears both the minimum size and notional filters."""
+        return size >= self.min_size and size > 0 and size * price >= self.min_notional
 
 
 class TakeProfit(DomainModel):
