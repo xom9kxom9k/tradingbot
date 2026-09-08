@@ -78,6 +78,7 @@ class BacktestResult:
     symbols: list[str]
     timeframe: str
     bars_processed: int = 0
+    slippage_cost: float = 0.0
     rejections: dict[str, int] = field(default_factory=dict)
 
     @property
@@ -162,6 +163,7 @@ class BacktestEngine:
             symbols=symbols,
             timeframe=self.config.exchange.timeframe,
             bars_processed=sum(len(frame) for frame in prepared.values()),
+            slippage_cost=self.portfolio.slippage_paid,
             rejections=self._rejection_counts(),
         )
 
@@ -273,7 +275,8 @@ class BacktestEngine:
             equity_at_entry=self.portfolio.balance,
         )
         self.portfolio.open_position(
-            OpenTrade(position=position, entry_fee=fill.fee, entry_bar=index)
+            OpenTrade(position=position, entry_fee=fill.fee, entry_bar=index),
+            slippage=fill.slippage,
         )
         logger.debug(
             "{symbol} {side} entry at {price:.6g}, size {size:.6g}",
@@ -421,7 +424,14 @@ class BacktestEngine:
         fill = self.broker.close_position_fill(record.position.side, reference, size, atr_value)
         trade = self.portfolio.reduce(
             symbol,
-            ExitChunk(price=fill.price, size=fill.size, fee=fill.fee, reason=reason, moment=moment),
+            ExitChunk(
+                price=fill.price,
+                size=fill.size,
+                fee=fill.fee,
+                reason=reason,
+                moment=moment,
+                slippage=fill.slippage,
+            ),
             bar_index=index,
         )
         if trade is not None:

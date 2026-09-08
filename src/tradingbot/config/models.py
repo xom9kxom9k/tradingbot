@@ -90,6 +90,9 @@ class BacktestConfig(StrictModel):
     currency: str = "USDT"
     seed: int = 42
     runs_dir: Path = Path("runs")
+    # Annual rate used by Sharpe and Sortino; zero is the honest default for a
+    # strategy whose capital sits in a stablecoin.
+    risk_free_rate: Fraction = 0.0
 
 
 class CostsConfig(StrictModel):

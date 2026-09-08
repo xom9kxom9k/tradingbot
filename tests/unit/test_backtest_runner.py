@@ -92,7 +92,17 @@ class TestArtifacts:
             "trades.parquet",
             "equity.parquet",
             "signals.parquet",
+            "metrics.json",
         }
+
+    def test_metrics_are_computed_and_stored(
+        self, config: AppConfig, data: dict[str, pd.DataFrame]
+    ) -> None:
+        stored = BacktestRunner(config).run(data=data)
+        saved = json.loads((stored.path / "metrics.json").read_text())
+        assert saved["trading"]["trades"] == len(stored.trades)
+        assert saved["returns"]["buy_hold_pct"][SYMBOL] != 0.0
+        assert "sharpe" in saved["ratios"]
 
     def test_meta_records_provenance(
         self, config: AppConfig, data: dict[str, pd.DataFrame]
@@ -207,7 +217,16 @@ class TestSummary:
         text = run_summary(stored)
         assert stored.run_id in text
         assert SYMBOL in text
-        assert "trades" in text
+        for heading in ("Returns", "Risk", "Trading", "Costs"):
+            assert heading in text
+
+    def test_the_short_form_omits_the_metric_table(
+        self, config: AppConfig, data: dict[str, pd.DataFrame]
+    ) -> None:
+        stored = BacktestRunner(config).run(data=data)
+        text = run_summary(stored, detailed=False)
+        assert stored.run_id in text
+        assert "Sharpe" not in text
 
 
 class TestStrategyConstruction:

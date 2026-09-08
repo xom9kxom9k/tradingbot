@@ -54,6 +54,12 @@ Each run writes `runs/<run_id>/`:
 | `trades.parquet` | One row per closed position |
 | `equity.parquet` | Balance, equity, open position count and drawdown per bar |
 | `signals.parquet` | Every signal, including rejected ones and why |
+| `metrics.json` | The full metric set of section 9.1 |
+
+Slippage is the one cost that the trade schema has no column for, so the engine
+tallies what it actually cost across all fills and reports it at run level. On a
+liquid pair with the default ATR model it is routinely larger than commissions,
+which is why it is shown next to them rather than folded into the PnL.
 
 The identifier is `YYYYMMDD-HHMMSS-<config hash>`. The prefix keeps runs apart,
 the suffix identifies the configuration. Trade identifiers are derived from the

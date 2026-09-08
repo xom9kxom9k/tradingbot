@@ -7,6 +7,7 @@ for the running bot.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -15,7 +16,7 @@ import typer
 import yaml
 
 from tradingbot import __version__
-from tradingbot.backtest import BacktestRunner, list_runs, run_summary
+from tradingbot.backtest import BacktestRunner, latest_run_id, list_runs, load_run, run_summary
 from tradingbot.config import AppConfig, load_config
 from tradingbot.core.exceptions import TradingBotError
 from tradingbot.core.logging import setup_logging
@@ -174,6 +175,39 @@ def backtest_run(
     except TradingBotError as exc:
         typer.secho(str(exc), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
+    typer.echo(run_summary(stored))
+
+
+@backtest_app.command("metrics")
+def backtest_metrics(
+    config: ConfigOption = None,
+    run_id: Annotated[
+        str | None,
+        typer.Option("--run-id", help="Run to report on; defaults to the most recent one."),
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Print metrics.json instead.")] = False,
+) -> None:
+    """Show the metrics of a stored run."""
+    effective = build_config(config, quiet=True)
+    runs_dir = effective.backtest.runs_dir
+    target = run_id or latest_run_id(runs_dir)
+    if target is None:
+        typer.secho(f"no runs found in {runs_dir}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        stored = load_run(target, runs_dir)
+    except TradingBotError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+    if not stored.metrics:
+        typer.secho(f"run {target} has no metrics.json", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+    if as_json:
+        typer.echo(json.dumps(stored.metrics, indent=2, sort_keys=True, default=str))
+        return
     typer.echo(run_summary(stored))
 
 

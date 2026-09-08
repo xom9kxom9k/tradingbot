@@ -52,6 +52,21 @@ def test_backtest_run_without_data_explains_itself(tmp_path: Path) -> None:
     assert "data download" in result.output
 
 
+def test_backtest_metrics_without_runs(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["backtest", "metrics", "--config", str(config_file(tmp_path))])
+    assert result.exit_code == 1
+    assert "no runs found" in result.output
+
+
+def test_backtest_metrics_of_an_unknown_run(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["backtest", "metrics", "--run-id", "nope", "--config", str(config_file(tmp_path))],
+    )
+    assert result.exit_code == 1
+    assert "not found" in result.output
+
+
 def test_backtest_list_is_empty_before_any_run(tmp_path: Path) -> None:
     result = runner.invoke(app, ["backtest", "list", "--config", str(config_file(tmp_path))])
     assert result.exit_code == 0

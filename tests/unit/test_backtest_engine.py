@@ -369,6 +369,29 @@ class TestCosts:
         )
         assert result.trades.iloc[0]["funding"] > 0
 
+    def test_slippage_actually_paid_is_measured(self) -> None:
+        config = make_config(
+            costs=CostsConfig(
+                taker_fee=0.0, slippage_model="fixed_bps", slippage_bps=10.0, apply_funding=False
+            )
+        )
+        rows = [(100.0, 100.0, 100.0, 100.0)] * 4
+        result = run(
+            ScriptedStrategy(entries={0: EntrySpec(stop_distance=50.0)}),
+            {SYMBOL: frame_from(rows)},
+            config,
+        )
+        # Two units, 0.1 of price concession on each of the two sides.
+        assert result.slippage_cost == pytest.approx(0.4)
+
+    def test_no_slippage_model_costs_nothing(self) -> None:
+        rows = [(100.0, 100.0, 100.0, 100.0)] * 4
+        result = run(
+            ScriptedStrategy(entries={0: EntrySpec(stop_distance=50.0)}),
+            {SYMBOL: frame_from(rows)},
+        )
+        assert result.slippage_cost == pytest.approx(0.0)
+
     def test_atr_slippage_scales_with_volatility(self) -> None:
         config = make_config(
             costs=CostsConfig(

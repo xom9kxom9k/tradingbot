@@ -3,7 +3,7 @@ UV ?= .venv/bin/uv
 PY ?= .venv/bin/python
 RUN := $(UV) run --
 
-.PHONY: help install lint format typecheck test test-all check download backtest report \
+.PHONY: help install lint format typecheck test test-all check download backtest metrics report \
         optimize walkforward montecarlo dashboard bot telegram-test docker-build docker-up clean
 
 help: ## Show this help
@@ -38,6 +38,9 @@ download: ## Download OHLCV history for the configured symbols
 
 backtest: ## Run a backtest with the default config
 	$(RUN) tradingbot backtest run
+
+metrics: ## Show the metrics of the latest run
+	$(RUN) tradingbot backtest metrics
 
 report: ## Build report.html for the latest run
 	$(RUN) tradingbot backtest report --open

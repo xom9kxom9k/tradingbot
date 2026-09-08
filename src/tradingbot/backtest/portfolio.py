@@ -38,6 +38,7 @@ class ExitChunk:
     fee: float
     reason: ExitReason
     moment: datetime
+    slippage: float = 0.0
 
 
 @dataclass(slots=True)
@@ -82,6 +83,9 @@ class Portfolio:
         self.trades: list[Trade] = []
         self.equity_curve: list[EquityPoint] = []
         self.peak_equity = initial_capital
+        # Slippage is a cost, but not one the section 8.4 trade schema carries,
+        # so it is tallied here and reported at the run level.
+        self.slippage_paid = 0.0
 
     @property
     def positions(self) -> list[Position]:
@@ -106,10 +110,11 @@ class Portfolio:
         """Balance plus unrealised PnL."""
         return self.balance + self.unrealized(marks)
 
-    def open_position(self, record: OpenTrade) -> None:
+    def open_position(self, record: OpenTrade, slippage: float = 0.0) -> None:
         """Register a freshly filled entry and charge its fee."""
         self.open_trades[record.position.symbol] = record
         self.balance -= record.entry_fee
+        self.slippage_paid += slippage
 
     def apply_funding(self, symbol: str, amount: float) -> None:
         """Charge (or credit) funding on an open position."""
@@ -138,7 +143,10 @@ class Portfolio:
         position.realized_pnl += gross
         position.fees_paid += chunk.fee
         position.size -= size
-        record.exits.append(ExitChunk(chunk.price, size, chunk.fee, chunk.reason, chunk.moment))
+        self.slippage_paid += chunk.slippage
+        record.exits.append(
+            ExitChunk(chunk.price, size, chunk.fee, chunk.reason, chunk.moment, chunk.slippage)
+        )
 
         if not record.is_closed:
             return None

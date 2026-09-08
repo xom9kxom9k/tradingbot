@@ -28,6 +28,7 @@ class Fill:
     price: float
     size: float
     fee: float
+    slippage: float = 0.0
 
     @property
     def notional(self) -> float:
@@ -93,8 +94,7 @@ class PaperBroker:
         atr: float | None = None,
     ) -> Fill:
         """Fill that establishes a position: buying a long, selling a short."""
-        price = self.fill_price(reference, buying=side is Side.LONG, atr=atr)
-        return Fill(price=price, size=size, fee=self.fee_for(price * size))
+        return self._fill(reference, size, buying=side is Side.LONG, atr=atr)
 
     def close_position_fill(
         self,
@@ -104,8 +104,17 @@ class PaperBroker:
         atr: float | None = None,
     ) -> Fill:
         """Fill that reduces a position: selling a long, buying back a short."""
-        price = self.fill_price(reference, buying=side is Side.SHORT, atr=atr)
-        return Fill(price=price, size=size, fee=self.fee_for(price * size))
+        return self._fill(reference, size, buying=side is Side.SHORT, atr=atr)
+
+    def _fill(self, reference: float, size: float, *, buying: bool, atr: float | None) -> Fill:
+        """Execute against ``reference``, recording what slippage actually cost."""
+        price = self.fill_price(reference, buying=buying, atr=atr)
+        return Fill(
+            price=price,
+            size=size,
+            fee=self.fee_for(price * size),
+            slippage=abs(price - reference) * size,
+        )
 
     def stop_fill_reference(self, side: Side, stop: float, bar_open: float) -> float:
         """Reference price for a stop that has been touched.

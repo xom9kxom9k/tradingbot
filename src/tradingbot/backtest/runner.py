@@ -21,6 +21,8 @@ import yaml
 from loguru import logger
 
 from tradingbot import __version__
+from tradingbot.analytics.metrics import PerformanceMetrics, compute_metrics
+from tradingbot.analytics.summary import format_annual_returns, format_metrics
 from tradingbot.backtest.engine import BacktestEngine
 from tradingbot.config.models import AppConfig
 from tradingbot.core.enums import RunStatus
@@ -142,6 +144,16 @@ class BacktestRunner:
             equity=result.final_equity,
         )
 
+        metrics = compute_metrics(
+            result.equity,
+            result.trades,
+            timeframe=result.timeframe,
+            risk_free_rate=self.config.backtest.risk_free_rate,
+            benchmark={symbol: frame["close"] for symbol, frame in frames.items()},
+            costs=self.config.costs,
+            slippage=result.slippage_cost,
+        )
+
         path = self.config.backtest.runs_dir / run_id
         stored = StoredRun(
             run_id=run_id,
@@ -150,7 +162,7 @@ class BacktestRunner:
             trades=result.trades,
             equity=result.equity,
             signals=result.signals,
-            metrics={},
+            metrics=metrics.to_dict(),
         )
         if save:
             save_run(stored)
@@ -281,23 +293,23 @@ def _read_optional(path: Path) -> pd.DataFrame:
     return pd.read_parquet(path)
 
 
-def run_summary(run: StoredRun) -> str:
-    """One-paragraph console summary of a finished run."""
-    trades = run.trades
-    lines = [
+def run_summary(run: StoredRun, *, detailed: bool = True) -> str:
+    """Console summary of a finished run, optionally with the full metric set."""
+    header = [
         f"run {run.run_id}",
         f"  symbols   {', '.join(run.meta.symbols)} @ {run.meta.timeframe}",
-        f"  trades    {len(trades)}",
+        f"  period    {run.meta.created_at:%Y-%m-%d %H:%M} UTC, {run.meta.duration_sec:.2f}s",
+        f"  artefacts {run.path}",
     ]
-    if not trades.empty:
-        wins = int((trades["pnl_net"] > 0).sum())
-        lines.append(f"  win rate  {wins / len(trades):.1%}")
-        lines.append(f"  net pnl   {trades['pnl_net'].sum():,.2f}")
-    if not run.equity.empty:
-        final = float(run.equity["equity"].iloc[-1])
-        lines.append(f"  equity    {final:,.2f}")
-    lines.append(f"  artefacts {run.path}")
-    return "\n".join(lines)
+    if not run.metrics or not detailed:
+        return "\n".join(header)
+
+    metrics = PerformanceMetrics.from_dict(run.metrics)
+    parts = ["\n".join(header), format_metrics(metrics)]
+    annual = format_annual_returns(metrics)
+    if annual:
+        parts.append(annual)
+    return "\n\n".join(parts)
 
 
 def utc_stamp() -> datetime:
