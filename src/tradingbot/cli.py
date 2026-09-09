@@ -8,6 +8,9 @@ for the running bot.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -89,6 +92,33 @@ def build_config(paths: list[Path] | None, *, quiet: bool = False) -> AppConfig:
 def version() -> None:
     """Print the package version."""
     typer.echo(__version__)
+
+
+@app.command()
+def dashboard(
+    config: ConfigOption = None,
+    port: Annotated[int, typer.Option("--port", help="Port for the Streamlit server.")] = 8501,
+    headless: Annotated[
+        bool, typer.Option("--headless", help="Do not open a browser window.")
+    ] = False,
+) -> None:
+    """Open the Streamlit dashboard on stored backtest runs."""
+    import tradingbot.dashboard.app as dash_mod
+
+    effective = build_config(config, quiet=True)
+    os.environ["TRADINGBOT_RUNS_DIR"] = str(Path(effective.backtest.runs_dir).resolve())
+    command = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(Path(dash_mod.__file__).resolve()),
+        "--server.port",
+        str(port),
+    ]
+    if headless:
+        command.extend(["--server.headless", "true"])
+    raise typer.Exit(subprocess.call(command))
 
 
 @config_app.command("show")

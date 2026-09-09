@@ -27,6 +27,23 @@ make report                  # report.html
 make dashboard               # интерактивный дашборд
 ```
 
+Либо `tradingbot dashboard` — тот же Streamlit-сервер. В сайдбаре выбирается `run_id`,
+фильтры по символу/направлению/периоду и сравнение двух прогонов.
+
+## Дашборд
+
+Страницы Overview, Trades, Chart, Analytics и Walk-Forward (Live появится на этапе 13).
+
+![Overview](docs/images/overview.png)
+
+![Price + signals](docs/images/chart.png)
+
+![Monthly returns](docs/images/analytics.png)
+
+Walk-Forward и Monte Carlo на этой стадии честно пустые: артефакты появятся после этапа 11.
+
+![Walk-forward placeholder](docs/images/walkforward.png)
+
 ## Разработка
 
 ```bash
