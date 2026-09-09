@@ -28,6 +28,7 @@ from tradingbot.backtest import (
     run_summary,
 )
 from tradingbot.config import AppConfig, load_config
+from tradingbot.config.models import ObjectiveName, WalkForwardMode
 from tradingbot.core.exceptions import TradingBotError
 from tradingbot.core.logging import setup_logging
 from tradingbot.data import CcxtDataFeed, ParquetCache, validate_ohlcv
@@ -320,6 +321,232 @@ def _load_stored_run(config: AppConfig, run_id: str | None) -> StoredRun:
     except TradingBotError as exc:
         typer.secho(str(exc), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
+
+
+ObjectiveOption = Annotated[
+    str | None,
+    typer.Option(
+        "--objective",
+        help="Ranking metric: sharpe, calmar, profit_factor or custom.",
+    ),
+]
+JobsOption = Annotated[
+    int | None,
+    typer.Option("--jobs", help="Parallel trial workers; defaults to the config value."),
+]
+
+
+def _resolve_objective(value: str | None) -> ObjectiveName | None:
+    if value is None:
+        return None
+    allowed: set[str] = {"sharpe", "calmar", "profit_factor", "custom"}
+    if value not in allowed:
+        typer.secho(
+            f"unknown objective {value!r}; choose from {sorted(allowed)}",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    return value  # type: ignore[return-value]
+
+
+@optimize_app.command("grid")
+def optimize_grid(
+    config: ConfigOption = None,
+    symbols: SymbolsOption = None,
+    objective: ObjectiveOption = None,
+    min_trades: Annotated[
+        int | None, typer.Option("--min-trades", help="Reject combinations with fewer trades.")
+    ] = None,
+    jobs: JobsOption = None,
+    note: Annotated[str, typer.Option("--note", help="Free-form label stored in meta.json.")] = "",
+) -> None:
+    """Exhaustive search over the configured parameter grid; keep the plateau, not the peak."""
+    from tradingbot.analytics.optimizer import run_grid, save_optimisation
+
+    effective = build_config(config)
+    runner = BacktestRunner(effective)
+    try:
+        data = runner.load_data(_selected_symbols(effective, symbols) if symbols else None)
+        search = run_grid(
+            effective,
+            data,
+            objective=_resolve_objective(objective),
+            min_trades=min_trades,
+            n_jobs=jobs,
+        )
+        stored = save_optimisation(
+            effective, data, search, method="grid", note=note or "optimize grid"
+        )
+    except TradingBotError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    _echo_search(search, stored)
+    _echo_report(stored)
+
+
+@optimize_app.command("optuna")
+def optimize_optuna(
+    config: ConfigOption = None,
+    symbols: SymbolsOption = None,
+    trials: Annotated[int | None, typer.Option("--trials", help="Number of TPE trials.")] = None,
+    objective: ObjectiveOption = None,
+    min_trades: Annotated[
+        int | None, typer.Option("--min-trades", help="Reject combinations with fewer trades.")
+    ] = None,
+    jobs: JobsOption = None,
+    note: Annotated[str, typer.Option("--note", help="Free-form label stored in meta.json.")] = "",
+) -> None:
+    """TPE search over the configured parameter ranges; keep the plateau, not the peak."""
+    from tradingbot.analytics.optimizer import run_optuna, save_optimisation
+
+    effective = build_config(config)
+    runner = BacktestRunner(effective)
+    try:
+        data = runner.load_data(_selected_symbols(effective, symbols) if symbols else None)
+        search = run_optuna(
+            effective,
+            data,
+            n_trials=trials,
+            objective=_resolve_objective(objective),
+            min_trades=min_trades,
+            n_jobs=jobs,
+        )
+        stored = save_optimisation(
+            effective, data, search, method="optuna", note=note or "optimize optuna"
+        )
+    except TradingBotError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    _echo_search(search, stored)
+    _echo_report(stored)
+
+
+@walkforward_app.command("run")
+def walkforward_run(
+    config: ConfigOption = None,
+    symbols: SymbolsOption = None,
+    mode: Annotated[
+        str | None,
+        typer.Option("--mode", help="rolling or anchored; defaults to the config value."),
+    ] = None,
+    is_months: Annotated[
+        int | None, typer.Option("--is-months", help="In-sample window length in months.")
+    ] = None,
+    oos_months: Annotated[
+        int | None, typer.Option("--oos-months", help="Out-of-sample window length in months.")
+    ] = None,
+    step_months: Annotated[
+        int | None, typer.Option("--step-months", help="How far to advance each window.")
+    ] = None,
+    note: Annotated[str, typer.Option("--note", help="Free-form label stored in meta.json.")] = "",
+) -> None:
+    """Optimise each in-sample window and stitch the frozen-parameter OOS equity."""
+    from tradingbot.analytics.walkforward import run_walkforward, save_walkforward
+
+    if mode is not None and mode not in {"rolling", "anchored"}:
+        typer.secho("mode must be 'rolling' or 'anchored'", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    wf_mode: WalkForwardMode | None = None if mode is None else mode  # type: ignore[assignment]
+
+    effective = build_config(config)
+    runner = BacktestRunner(effective)
+    try:
+        data = runner.load_data(_selected_symbols(effective, symbols) if symbols else None)
+        study = run_walkforward(
+            effective,
+            data,
+            mode=wf_mode,
+            is_months=is_months,
+            oos_months=oos_months,
+            step_months=step_months,
+        )
+        stored = save_walkforward(effective, data, study, note=note)
+    except TradingBotError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    _echo_walkforward(study, stored)
+    _echo_report(stored)
+
+
+@montecarlo_app.command("run")
+def montecarlo_run(
+    config: ConfigOption = None,
+    run_id: Annotated[
+        str | None,
+        typer.Option("--run-id", help="Run to shuffle; defaults to the most recent one."),
+    ] = None,
+    iterations: Annotated[
+        int | None, typer.Option("--iterations", help="Number of shuffled paths.")
+    ] = None,
+) -> None:
+    """Shuffle the trade order of a stored run and write a Monte Carlo fan chart."""
+    from tradingbot.analytics.monte_carlo import attach_monte_carlo, run_monte_carlo_on_run
+
+    effective = build_config(config)
+    stored = _load_stored_run(effective, run_id)
+    try:
+        result = run_monte_carlo_on_run(stored, effective, iterations=iterations)
+        attach_monte_carlo(stored, result)
+    except TradingBotError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"monte carlo {stored.run_id}")
+    typer.echo(f"  artefacts {stored.path / 'montecarlo.parquet'}")
+    finals = result.stats["final_equity"]
+    drawdowns = result.stats["max_drawdown"]
+    typer.echo(
+        f"  final equity  p5={finals['p5']:,.2f}  "
+        f"p50={finals['p50']:,.2f}  p95={finals['p95']:,.2f}"
+    )
+    typer.echo(
+        f"  max drawdown  p50={drawdowns['p50']:.2%}  "
+        f"P(DD>{result.stats['dd_threshold_pct']:.0%})={result.stats['p_dd_gt_threshold']:.1%}  "
+        f"P(ruin)={result.stats['p_ruin']:.1%}"
+    )
+    _echo_report(stored)
+
+
+def _echo_search(search: object, stored: StoredRun) -> None:
+    from tradingbot.analytics.optimizer import SearchResult
+
+    assert isinstance(search, SearchResult)
+    chosen = search.chosen
+    typer.echo(run_summary(stored))
+    accepted = sum(1 for trial in search.trials if trial.accepted)
+    typer.echo(f"  trials    {len(search.trials)} ({accepted} accepted)")
+    if search.best and chosen and search.best.params != chosen.params:
+        typer.echo(f"  peak      {search.best.params}  score={search.best.score:.3f}")
+        typer.echo(f"  plateau   {chosen.params}  score={chosen.score:.3f}")
+    elif chosen:
+        typer.echo(f"  chosen    {chosen.params}  score={chosen.score:.3f}")
+
+
+def _echo_walkforward(study: object, stored: StoredRun) -> None:
+    from tradingbot.analytics.walkforward import WalkForwardStudy
+
+    assert isinstance(study, WalkForwardStudy)
+    typer.echo(run_summary(stored))
+    wfe = "n/a" if study.wfe is None else f"{study.wfe:.3f}"
+    health = "healthy" if study.healthy else "unhealthy"
+    typer.echo(
+        f"  walk-forward {study.mode}  windows={len(study.windows)}  "
+        f"WFE={wfe}  positive OOS={study.positive_oos_share:.0%}  {health}"
+    )
+    table = study.windows_frame()
+    if not table.empty:
+        wanted = ("window", "is_return", "oos_return", "wfe", "is_trades", "oos_trades")
+        cols = [column for column in wanted if column in table]
+        typer.echo(table[cols].to_string(index=False))
+
+
+def _echo_report(stored: StoredRun) -> None:
+    try:
+        path = write_report(stored)
+    except Exception as exc:  # pragma: no cover - report must never fail the study
+        typer.secho(f"report skipped: {exc}", fg=typer.colors.YELLOW, err=True)
+        return
+    typer.echo(f"report {path}")
 
 
 if __name__ == "__main__":  # pragma: no cover

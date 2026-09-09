@@ -140,6 +140,46 @@ class StrategyConfig(StrictModel):
     params: dict[str, Any] = Field(default_factory=dict)
 
 
+def _default_optimize_grid() -> dict[str, list[Any]]:
+    return {
+        "entry_channel": [15, 20, 25],
+        "adx_min": [15.0, 20.0, 25.0],
+    }
+
+
+ObjectiveName = Literal["sharpe", "calmar", "profit_factor", "custom"]
+WalkForwardMode = Literal["rolling", "anchored"]
+
+
+class OptimizeConfig(StrictModel):
+    """Search space and ranking rules for parameter studies (section 9.3)."""
+
+    objective: ObjectiveName = "custom"
+    min_trades: int = Field(default=30, ge=1)
+    optuna_trials: int = Field(default=40, ge=1)
+    heatmap_x: str = "entry_channel"
+    heatmap_y: str = "adx_min"
+    n_jobs: int = Field(default=1, ge=1)
+    grid: dict[str, list[Any]] = Field(default_factory=_default_optimize_grid)
+
+
+class WalkForwardConfig(StrictModel):
+    """In-sample / out-of-sample windowing (section 9.2)."""
+
+    mode: WalkForwardMode = "rolling"
+    is_months: int = Field(default=18, ge=1)
+    oos_months: int = Field(default=6, ge=1)
+    step_months: int = Field(default=6, ge=1)
+
+
+class MonteCarloConfig(StrictModel):
+    """Bootstrap settings for shuffled-trade paths (section 9.4)."""
+
+    iterations: int = Field(default=1000, ge=10)
+    ruin_equity_pct: Fraction = 0.0
+    dd_threshold_pct: float = Field(default=0.20, ge=0.0, le=1.0)
+
+
 class LiveConfig(StrictModel):
     """Behaviour of the live/paper trading loop."""
 
@@ -191,6 +231,9 @@ class AppConfig(StrictModel):
     live: LiveConfig = LiveConfig()
     notify: NotifyConfig = NotifyConfig()
     logging: LoggingConfig = LoggingConfig()
+    optimize: OptimizeConfig = OptimizeConfig()
+    walkforward: WalkForwardConfig = WalkForwardConfig()
+    montecarlo: MonteCarloConfig = MonteCarloConfig()
 
     def to_yaml_dict(self) -> dict[str, Any]:
         """Plain, YAML-serialisable snapshot of the effective configuration."""

@@ -17,10 +17,13 @@ from tradingbot.config.models import (
     ExchangeConfig,
     LiveConfig,
     LoggingConfig,
+    MonteCarloConfig,
     NotifyConfig,
+    OptimizeConfig,
     RiskConfig,
     StrategyConfig,
     TelegramSecrets,
+    WalkForwardConfig,
 )
 
 __all__ = [
@@ -31,10 +34,13 @@ __all__ = [
     "ExchangeConfig",
     "LiveConfig",
     "LoggingConfig",
+    "MonteCarloConfig",
     "NotifyConfig",
+    "OptimizeConfig",
     "RiskConfig",
     "StrategyConfig",
     "TelegramSecrets",
+    "WalkForwardConfig",
     "deep_merge",
     "env_overrides",
     "load_config",

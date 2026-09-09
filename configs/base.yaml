@@ -55,3 +55,25 @@ logging:
   json_file: logs/tradingbot.jsonl
   rotation: 10 MB
   retention: 14 days
+
+optimize:
+  objective: custom          # sharpe | calmar | profit_factor | custom
+  min_trades: 30
+  optuna_trials: 40
+  heatmap_x: entry_channel
+  heatmap_y: adx_min
+  n_jobs: 1
+  grid:
+    entry_channel: [15, 20, 25]
+    adx_min: [15.0, 20.0, 25.0]
+
+walkforward:
+  mode: rolling              # rolling | anchored
+  is_months: 18
+  oos_months: 6
+  step_months: 6
+
+montecarlo:
+  iterations: 1000
+  ruin_equity_pct: 0.0
+  dd_threshold_pct: 0.20

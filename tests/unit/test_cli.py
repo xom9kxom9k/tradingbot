@@ -16,7 +16,16 @@ runner = CliRunner()
 def test_help_lists_command_groups() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for group in ("data", "backtest", "optimize", "walkforward", "live", "telegram", "dashboard"):
+    for group in (
+        "data",
+        "backtest",
+        "optimize",
+        "walkforward",
+        "montecarlo",
+        "live",
+        "telegram",
+        "dashboard",
+    ):
         assert group in result.stdout
 
 
@@ -71,6 +80,30 @@ def test_backtest_report_without_runs(tmp_path: Path) -> None:
     result = runner.invoke(app, ["backtest", "report", "--config", str(config_file(tmp_path))])
     assert result.exit_code == 1
     assert "no runs found" in result.output
+
+
+def test_optimize_grid_help() -> None:
+    result = runner.invoke(app, ["optimize", "grid", "--help"])
+    assert result.exit_code == 0
+    assert "plateau" in result.stdout.lower() or "grid" in result.stdout.lower()
+
+
+def test_walkforward_run_help() -> None:
+    result = runner.invoke(app, ["walkforward", "run", "--help"])
+    assert result.exit_code == 0
+    assert "--is-months" in result.stdout
+
+
+def test_montecarlo_run_help() -> None:
+    result = runner.invoke(app, ["montecarlo", "run", "--help"])
+    assert result.exit_code == 0
+    assert "--run-id" in result.stdout
+
+
+def test_optimize_grid_without_data_explains_itself(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["optimize", "grid", "--config", str(config_file(tmp_path))])
+    assert result.exit_code == 1
+    assert "data download" in result.output
 
 
 def test_dashboard_help() -> None:

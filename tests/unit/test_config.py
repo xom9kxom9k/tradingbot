@@ -103,6 +103,9 @@ class TestLoadConfig:
         assert config.strategy.name == "donchian_trend"
         assert config.strategy.params["entry_channel"] == 20
         assert config.notify.daily_report_utc == time(9, 0)
+        assert config.optimize.min_trades == 30
+        assert config.walkforward.is_months == 18
+        assert config.montecarlo.iterations == 1000
 
     def test_defaults_fill_missing_sections(self, config_dir: Path) -> None:
         config = load_config(config_dir=config_dir, use_env=False)

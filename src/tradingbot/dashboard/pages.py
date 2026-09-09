@@ -15,27 +15,8 @@ from tradingbot.analytics.metrics import PerformanceMetrics
 from tradingbot.backtest.runner import StoredRun
 from tradingbot.dashboard.compare import comparison_equity, headline_table
 from tradingbot.dashboard.session import day_of_week_chart, hour_of_day_chart
-from tradingbot.reporting.charts import ExtraCharts, build_charts
-from tradingbot.reporting.html_report import CARD_KEYS, charts_for_run
-
-
-def extras_for(run: StoredRun) -> ExtraCharts:
-    """Load optional later-stage artefacts sitting next to the run."""
-    extras = ExtraCharts()
-    windows = run.path / "walkforward.parquet"
-    if windows.is_file():
-        extras.walkforward_windows = pd.read_parquet(windows)
-    equity = run.path / "walkforward_equity.parquet"
-    if equity.is_file():
-        frame = pd.read_parquet(equity)
-        extras.walkforward_equity = frame.iloc[:, 0] if not frame.empty else None
-    monte = run.path / "montecarlo.parquet"
-    if monte.is_file():
-        extras.montecarlo_paths = pd.read_parquet(monte)
-    grid = run.path / "sensitivity.parquet"
-    if grid.is_file():
-        extras.parameter_grid = pd.read_parquet(grid)
-    return extras
+from tradingbot.reporting.charts import build_charts
+from tradingbot.reporting.html_report import CARD_KEYS, charts_for_run, extras_for
 
 
 def metric_cards(run: StoredRun) -> None:

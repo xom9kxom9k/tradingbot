@@ -68,6 +68,30 @@ def write_report(
     return target
 
 
+def extras_for(run: StoredRun) -> ExtraCharts:
+    """Load walk-forward, Monte Carlo and heatmap artefacts sitting next to a run."""
+    extras = ExtraCharts()
+    windows = run.path / "walkforward.parquet"
+    if windows.is_file():
+        extras.walkforward_windows = pd.read_parquet(windows)
+    equity = run.path / "walkforward_equity.parquet"
+    if equity.is_file():
+        frame = pd.read_parquet(equity)
+        extras.walkforward_equity = frame.iloc[:, 0] if not frame.empty else None
+    monte = run.path / "montecarlo.parquet"
+    if monte.is_file():
+        extras.montecarlo_paths = pd.read_parquet(monte)
+    grid = run.path / "sensitivity.parquet"
+    if grid.is_file():
+        extras.parameter_grid = pd.read_parquet(grid)
+    optimize = run.meta.config.get("optimize", {})
+    if isinstance(optimize, dict):
+        extras.x_label = str(optimize.get("heatmap_x", extras.x_label))
+        extras.y_label = str(optimize.get("heatmap_y", extras.y_label))
+        extras.metric_label = str(optimize.get("objective", extras.metric_label))
+    return extras
+
+
 def charts_for_run(
     run: StoredRun,
     *,
@@ -76,13 +100,14 @@ def charts_for_run(
 ) -> ChartBundle:
     """Build the twelve charts for a stored run, loading candles when needed."""
     candles = dict(prices) if prices is not None else load_prices(run)
+    resolved = extras if extras is not None else extras_for(run)
     return build_charts(
         equity=run.equity,
         trades=run.trades,
         prices=candles,
         initial_capital=run.initial_capital,
         strategy_params=_strategy_params(run),
-        extras=extras,
+        extras=resolved,
     )
 
 
