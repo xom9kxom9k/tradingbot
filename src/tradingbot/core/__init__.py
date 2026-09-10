@@ -9,6 +9,7 @@ from tradingbot.core.enums import (
     Regime,
     RunStatus,
     Side,
+    SignalStatus,
     SignalType,
 )
 from tradingbot.core.models import (
@@ -36,6 +37,7 @@ __all__ = [
     "RunStatus",
     "Side",
     "Signal",
+    "SignalStatus",
     "SignalType",
     "TakeProfit",
     "Trade",

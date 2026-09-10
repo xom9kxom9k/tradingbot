@@ -80,3 +80,11 @@ class PositionStatus(StrEnum):
 
     OPEN = "OPEN"
     CLOSED = "CLOSED"
+
+
+class SignalStatus(StrEnum):
+    """Lifecycle of a persisted live signal (section 13.2)."""
+
+    NEW = "NEW"
+    NOTIFIED = "NOTIFIED"
+    REJECTED = "REJECTED"
