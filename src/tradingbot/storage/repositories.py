@@ -276,6 +276,11 @@ class StateRepo:
         stmt = select(EquitySnapshotRow).order_by(EquitySnapshotRow.ts.desc()).limit(1)
         return self.session.scalar(stmt)
 
+    def equity_history(self) -> list[EquitySnapshotRow]:
+        """Every marked-to-market sample, oldest first."""
+        stmt = select(EquitySnapshotRow).order_by(EquitySnapshotRow.ts.asc())
+        return list(self.session.scalars(stmt))
+
 
 class NotificationQueueRepo:
     """Persistent outbound queue so a Telegram outage cannot drop a message."""

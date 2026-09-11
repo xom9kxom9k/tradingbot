@@ -25,6 +25,7 @@ make download                # исторические данные
 make backtest                # бэктест
 make report                  # report.html
 make dashboard               # интерактивный дашборд
+make telegram-test           # проверка Telegram
 ```
 
 Либо `tradingbot dashboard` — тот же Streamlit-сервер. В сайдбаре выбирается `run_id`,
@@ -44,6 +45,27 @@ Walk-Forward и Monte Carlo читают артефакты соответств
 показывает состояние paper-бота из SQLite (`tradingbot live status` / `make bot`).
 
 ![Walk-forward placeholder](docs/images/walkforward.png)
+
+## Telegram
+
+1. Напишите `@BotFather` в Telegram, команда `/newbot` — получите токен.
+2. Напишите своему боту любое сообщение, затем откройте
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` и скопируйте `chat.id`.
+3. Положите значения в `.env`:
+
+```
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+TELEGRAM_CHAT_IDS=111111111
+TELEGRAM_ENABLED=true
+```
+
+Несколько чатов — через запятую. Только эти `chat_id` могут вызывать команды
+(`/status`, `/positions`, `/pause`, …); остальные запросы игнорируются.
+
+```bash
+make telegram-test              # проверить доставку
+make bot                        # paper-режим: сигналы уходят в Telegram
+```
 
 ## Разработка
 

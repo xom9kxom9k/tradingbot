@@ -62,12 +62,24 @@ def write_png(fig: go.Figure, path: Path, *, width: int = WIDTH, height: int = H
     Raises:
         PngExportError: The renderer is unavailable or rejected the figure.
     """
-    try:
-        fig.write_image(str(path), format="png", width=width, height=height, scale=2)
-    except Exception as exc:  # kaleido raises a variety of errors across versions
-        raise PngExportError(f"could not render {path.name}: {exc}") from exc
+    path.write_bytes(png_bytes(fig, width=width, height=height))
     logger.debug("png written to {path}", path=path)
     return path
+
+
+def png_bytes(fig: go.Figure, *, width: int = WIDTH, height: int = HEIGHT) -> bytes:
+    """Render one figure to PNG bytes.
+
+    Raises:
+        PngExportError: The renderer is unavailable or rejected the figure.
+    """
+    try:
+        payload = fig.to_image(format="png", width=width, height=height, scale=2)
+    except Exception as exc:  # kaleido raises a variety of errors across versions
+        raise PngExportError(f"could not render PNG: {exc}") from exc
+    if not isinstance(payload, (bytes, bytearray)):
+        payload = bytes(payload)
+    return bytes(payload)
 
 
 def kaleido_available() -> bool:

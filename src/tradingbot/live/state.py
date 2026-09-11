@@ -184,31 +184,41 @@ class LiveStore:
         marks: dict[str, float],
         new_signals: list[tuple[Signal, bool, str]],
         new_trades: list[Trade],
+        timeframe: str = "4h",
+        notify_rejected: bool = False,
     ) -> None:
         """Write everything that changed on one processed bar."""
         with self.db.session_scope() as session:
             repos = bind_repos(session)
             repos.state.set_last_processed_bar(symbol, bar_ts)
+            equity = portfolio.equity(marks)
             for signal, approved, reason in new_signals:
                 status = SignalStatus.NEW if approved else SignalStatus.REJECTED
                 _, created = repos.signals.save(signal, status=status)
                 if not created:
                     continue
-                payload: dict[str, Any] = {
-                    "kind": "signal" if approved else "rejected_signal",
-                    "signal_uid": signal.uid,
-                    "symbol": signal.symbol,
-                    "side": signal.side.value,
-                    "signal_type": signal.signal_type.value,
-                    "status": status.value,
-                }
-                if not approved:
-                    payload["reason"] = reason
-                repos.notifications.enqueue(payload)
+                if not approved and not notify_rejected:
+                    continue
+                repos.notifications.enqueue(
+                    {
+                        "kind": "signal" if approved else "rejected_signal",
+                        "signal_uid": signal.uid,
+                        "signal": signal.model_dump(mode="json"),
+                        "reason": reason,
+                    }
+                )
             for trade in new_trades:
                 repos.trades.add(trade)
+                repos.notifications.enqueue(
+                    {
+                        "kind": "trade",
+                        "trade": trade.model_dump(mode="json"),
+                        "equity": equity,
+                        "initial_capital": portfolio.initial_capital,
+                        "timeframe": timeframe,
+                    }
+                )
             _sync_positions(repos, portfolio)
-            equity = portfolio.equity(marks)
             drawdown = (
                 (portfolio.peak_equity - equity) / portfolio.peak_equity
                 if portfolio.peak_equity > 0
@@ -221,6 +231,11 @@ class LiveStore:
                 open_positions=len(portfolio.open_trades),
                 drawdown_pct=drawdown,
             )
+
+    def enqueue(self, payload: dict[str, Any]) -> None:
+        """Append a notification payload."""
+        with self.db.session_scope() as session:
+            bind_repos(session).notifications.enqueue(dict(payload))
 
 
 def restore_portfolio(config: AppConfig, store: LiveStore, engine_portfolio: Portfolio) -> None:

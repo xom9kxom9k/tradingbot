@@ -584,5 +584,41 @@ def _echo_report(stored: StoredRun) -> None:
     typer.echo(f"report {path}")
 
 
+@telegram_app.command("test")
+def telegram_test(config: ConfigOption = None) -> None:
+    """Send a test message to every whitelisted chat_id."""
+    import asyncio
+
+    from tradingbot.config.loader import load_secrets
+    from tradingbot.core.exceptions import NotificationError
+    from tradingbot.notify.telegram import TelegramNotifier
+
+    effective = build_config(config, quiet=True)
+    secrets = load_secrets()
+    if not (effective.notify.telegram_enabled and secrets.enabled and secrets.configured):
+        typer.secho(
+            "Telegram is not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS in .env.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    async def _send() -> None:
+        notifier = TelegramNotifier(
+            secrets, max_per_minute=effective.notify.max_messages_per_minute
+        )
+        try:
+            await notifier.send_test()
+        finally:
+            await notifier.close()
+
+    try:
+        asyncio.run(_send())
+    except NotificationError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo("test message sent")
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()

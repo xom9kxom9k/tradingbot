@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
@@ -133,6 +134,26 @@ def test_live_run_rejects_unknown_mode(tmp_path: Path) -> None:
     )
     assert result.exit_code == 1
     assert "paper" in result.output
+
+
+def test_telegram_test_help() -> None:
+    result = runner.invoke(app, ["telegram", "test", "--help"])
+    assert result.exit_code == 0
+    assert "test" in result.stdout.lower()
+
+
+def test_telegram_test_without_secrets_explains_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tradingbot.config.models import TelegramSecrets
+
+    monkeypatch.setattr(
+        "tradingbot.config.loader.load_secrets",
+        lambda environ=None: TelegramSecrets(bot_token=None, chat_ids=[], enabled=True),
+    )
+    result = runner.invoke(app, ["telegram", "test", "--config", str(config_file(tmp_path))])
+    assert result.exit_code == 1
+    assert "TELEGRAM_BOT_TOKEN" in result.output
 
 
 def test_backtest_list_is_empty_before_any_run(tmp_path: Path) -> None:

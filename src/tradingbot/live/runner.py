@@ -6,6 +6,7 @@ import asyncio
 import os
 import signal
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
@@ -14,7 +15,7 @@ from loguru import logger
 
 from tradingbot.backtest.engine import BacktestEngine, SymbolState, _optional_float
 from tradingbot.backtest.runner import build_strategy
-from tradingbot.config.models import AppConfig, LiveMode
+from tradingbot.config.models import AppConfig, LiveMode, TelegramSecrets
 from tradingbot.core.exceptions import TradingBotError
 from tradingbot.core.models import Signal
 from tradingbot.data.cache import ParquetCache
@@ -34,6 +35,9 @@ from tradingbot.live.state import (
     restore_portfolio,
     restore_risk,
 )
+from tradingbot.notify.base import Notifier, SafeNotifier
+from tradingbot.notify.queue import NotificationDispatcher, seconds_until_daily
+from tradingbot.notify.telegram import build_notifier
 from tradingbot.storage.repositories import bind_repos
 
 Clock = Callable[[], datetime]
@@ -67,6 +71,8 @@ class LiveRunner:
         feed: DataFeed | None = None,
         clock: Clock | None = None,
         history: Mapping[str, pd.DataFrame] | None = None,
+        notifier: Notifier | None = None,
+        secrets: TelegramSecrets | None = None,
     ) -> None:
         self.config = config
         self.store = store or LiveStore.from_config(config)
@@ -81,6 +87,18 @@ class LiveRunner:
         self._signal_cursor = 0
         self._restored = False
         self._last_exit_ts: dict[str, datetime] = {}
+        from tradingbot.config.loader import load_secrets
+
+        self.secrets = secrets if secrets is not None else load_secrets()
+        inner = notifier or build_notifier(
+            self.secrets,
+            max_per_minute=config.notify.max_messages_per_minute,
+            enabled=config.notify.telegram_enabled,
+        )
+        self.notifier = SafeNotifier(inner)
+        self.dispatcher = NotificationDispatcher(self.store, inner, config)
+        self._halt_notified = False
+        self._feed_lost = False
 
     @property
     def mode(self) -> LiveMode:
@@ -176,6 +194,7 @@ class LiveRunner:
             self.health.last_cycle_at = now
             self.health.bars_processed += handled
             self.store.save_health(self.health)
+            self._notify_risk_halt()
         return handled
 
     async def run(self, stop: asyncio.Event | None = None) -> None:
@@ -197,6 +216,15 @@ class LiveRunner:
             symbols=",".join(self.config.exchange.symbols),
             tf=self.config.exchange.timeframe,
         )
+        notify_task = asyncio.create_task(self._notify_loop(stop))
+        bot_task = asyncio.create_task(self._bot_loop(stop))
+        daily_task = asyncio.create_task(self._daily_loop(stop))
+        self.dispatcher.enqueue_system(
+            "started",
+            mode=self.mode,
+            symbols=", ".join(self.config.exchange.symbols),
+            timeframe=self.config.exchange.timeframe,
+        )
         try:
             while not stop.is_set():
                 try:
@@ -207,10 +235,12 @@ class LiveRunner:
                     logger.error("live tick failed: {exc}", exc=exc)
                     self.health.last_error = str(exc)
                     self.store.save_health(self.health)
+                    self.dispatcher.enqueue_system("exception", detail=str(exc))
                 except Exception as exc:
                     logger.exception("unexpected live tick error")
                     self.health.last_error = str(exc)
                     self.store.save_health(self.health)
+                    self.dispatcher.enqueue_system("exception", detail=str(exc))
                 delay = seconds_until_fetch(
                     self.now(),
                     self.config.exchange.timeframe,
@@ -229,6 +259,17 @@ class LiveRunner:
             self.health.running = False
             self.store.save_health(self.health)
             self._snapshot_runtime()
+            self.dispatcher.enqueue_system("stopped")
+            try:
+                await self.dispatcher.drain()
+            except Exception:
+                logger.exception("final notify drain failed")
+            for task in (notify_task, bot_task, daily_task):
+                task.cancel()
+            for task in (notify_task, bot_task, daily_task):
+                with suppress(asyncio.CancelledError):
+                    await task
+            await self.notifier.close()
             if self._owns_feed and self.feed is not None:
                 self.feed.close()
             logger.info("live runner stopped")
@@ -297,6 +338,8 @@ class LiveRunner:
             marks=marks,
             new_signals=new_signals,
             new_trades=new_trades,
+            timeframe=self.config.exchange.timeframe,
+            notify_rejected=self.config.notify.notify_rejected_signals,
         )
         self._signal_cursor = len(self.engine.emitted)
         self._trade_cursor = len(self.engine.portfolio.trades)
@@ -350,6 +393,13 @@ class LiveRunner:
                 cache.sync(feed, symbol, timeframe, self.config.data.start, self.config.data.end)
             except TradingBotError as exc:
                 logger.warning("{symbol}: cache sync failed: {exc}", symbol=symbol, exc=exc)
+                if not self._feed_lost:
+                    self.dispatcher.enqueue_system("feed_lost", detail=str(exc))
+                    self._feed_lost = True
+            else:
+                if self._feed_lost:
+                    self.dispatcher.enqueue_system("feed_restored")
+                    self._feed_lost = False
             frame = cache.load(symbol, timeframe, self.config.data.start, self.config.data.end)
             if not frame.empty:
                 frames[symbol] = frame
@@ -387,6 +437,41 @@ class LiveRunner:
             last_exit_ts=self._last_exit_ts,
             risk=self.engine.risk,
         )
+
+    def _notify_risk_halt(self) -> None:
+        halted = self.engine.risk.state.halted
+        if halted and not self._halt_notified:
+            self.dispatcher.enqueue_system("risk_halt", detail=self.engine.risk.state.halt_reason)
+            self._halt_notified = True
+        elif not halted:
+            self._halt_notified = False
+
+    async def _notify_loop(self, stop: asyncio.Event) -> None:
+        while not stop.is_set():
+            try:
+                await self.dispatcher.drain()
+            except Exception:
+                logger.exception("notify drain failed")
+            if await self._sleep(5.0, stop):
+                break
+
+    async def _daily_loop(self, stop: asyncio.Event) -> None:
+        while not stop.is_set():
+            delay = seconds_until_daily(self.now(), self.config.notify.daily_report_utc)
+            if await self._sleep(delay, stop):
+                break
+            try:
+                self.dispatcher.enqueue_daily_report()
+            except Exception:
+                logger.exception("daily report enqueue failed")
+
+    async def _bot_loop(self, stop: asyncio.Event) -> None:
+        from tradingbot.notify.bot import run_bot
+
+        try:
+            await run_bot(self.config, self.store, self.secrets, stop)
+        except Exception:
+            logger.exception("telegram bot stopped")
 
     def _install_signals(self, stop: asyncio.Event) -> None:
         loop = asyncio.get_running_loop()
