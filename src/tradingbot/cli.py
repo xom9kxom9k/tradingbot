@@ -108,6 +108,7 @@ def dashboard(
 
     effective = build_config(config, quiet=True)
     os.environ["TRADINGBOT_RUNS_DIR"] = str(Path(effective.backtest.runs_dir).resolve())
+    os.environ["TRADINGBOT_STATE_DB"] = str(Path(effective.live.state_db).resolve())
     command = [
         sys.executable,
         "-m",
@@ -538,6 +539,40 @@ def _echo_walkforward(study: object, stored: StoredRun) -> None:
         wanted = ("window", "is_return", "oos_return", "wfe", "is_trades", "oos_trades")
         cols = [column for column in wanted if column in table]
         typer.echo(table[cols].to_string(index=False))
+
+
+@live_app.command("run")
+def live_run(
+    config: ConfigOption = None,
+    mode: Annotated[
+        str | None,
+        typer.Option("--mode", help="paper or signal_only; defaults to the config value."),
+    ] = None,
+) -> None:
+    """Start the live loop and wait for candle closes (Ctrl+C to stop)."""
+    import asyncio
+
+    from tradingbot.live.runner import LiveRunner
+
+    effective = build_config(config)
+    if mode is not None:
+        if mode not in {"paper", "signal_only"}:
+            typer.secho("mode must be 'paper' or 'signal_only'", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
+        effective = effective.model_copy(
+            update={"live": effective.live.model_copy(update={"mode": mode})}
+        )
+    asyncio.run(LiveRunner(effective).run())
+
+
+@live_app.command("status")
+def live_status(config: ConfigOption = None) -> None:
+    """Print health, last processed bars and open positions from the state database."""
+    from tradingbot.live.state import LiveStore, format_status
+
+    effective = build_config(config, quiet=True)
+    store = LiveStore.from_config(effective)
+    typer.echo(format_status(store.read_status()))
 
 
 def _echo_report(stored: StoredRun) -> None:

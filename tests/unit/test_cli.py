@@ -48,6 +48,7 @@ def config_file(tmp_path: Path) -> Path:
                     "file": str(tmp_path / "log.txt"),
                     "json_file": str(tmp_path / "log.jsonl"),
                 },
+                "live": {"state_db": str(tmp_path / "state.db")},
             }
         ),
         encoding="utf-8",
@@ -110,6 +111,28 @@ def test_dashboard_help() -> None:
     result = runner.invoke(app, ["dashboard", "--help"])
     assert result.exit_code == 0
     assert "Streamlit" in result.stdout or "dashboard" in result.stdout.lower()
+
+
+def test_live_run_help() -> None:
+    result = runner.invoke(app, ["live", "run", "--help"])
+    assert result.exit_code == 0
+    assert "--mode" in result.stdout
+
+
+def test_live_status_on_a_fresh_database(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["live", "status", "--config", str(config_file(tmp_path))])
+    assert result.exit_code == 0
+    assert "mode" in result.stdout
+    assert "running" in result.stdout
+
+
+def test_live_run_rejects_unknown_mode(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["live", "run", "--mode", "real", "--config", str(config_file(tmp_path))],
+    )
+    assert result.exit_code == 1
+    assert "paper" in result.output
 
 
 def test_backtest_list_is_empty_before_any_run(tmp_path: Path) -> None:

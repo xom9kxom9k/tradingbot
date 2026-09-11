@@ -150,6 +150,7 @@ class TestApp:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("TRADINGBOT_RUNS_DIR", str(tmp_path / "missing"))
+        monkeypatch.setenv("TRADINGBOT_STATE_DB", str(tmp_path / "missing-state.db"))
         app = AppTest.from_file(
             str(Path(__file__).resolve().parents[2] / "dashboard" / "app.py"),
             default_timeout=30,
@@ -163,10 +164,11 @@ class TestApp:
         self, stored, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("TRADINGBOT_RUNS_DIR", str(stored.path.parent))
+        monkeypatch.setenv("TRADINGBOT_STATE_DB", str(tmp_path / "live-state.db"))
         script = Path(__file__).resolve().parents[2] / "dashboard" / "app.py"
         app = AppTest.from_file(str(script), default_timeout=60)
         app.run()
         assert not app.exception
-        for page in ("Trades", "Chart", "Analytics", "Walk-Forward"):
+        for page in ("Trades", "Chart", "Analytics", "Walk-Forward", "Live"):
             app.radio[0].set_value(page).run()
             assert not app.exception, page

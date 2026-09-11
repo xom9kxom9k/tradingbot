@@ -32,7 +32,7 @@ make dashboard               # интерактивный дашборд
 
 ## Дашборд
 
-Страницы Overview, Trades, Chart, Analytics и Walk-Forward (Live появится на этапе 13).
+Страницы Overview, Trades, Chart, Analytics, Walk-Forward и Live.
 
 ![Overview](docs/images/overview.png)
 
@@ -40,7 +40,8 @@ make dashboard               # интерактивный дашборд
 
 ![Monthly returns](docs/images/analytics.png)
 
-Walk-Forward и Monte Carlo на этой стадии честно пустые: артефакты появятся после этапа 11.
+Walk-Forward и Monte Carlo читают артефакты соответствующего прогона; страница Live
+показывает состояние paper-бота из SQLite (`tradingbot live status` / `make bot`).
 
 ![Walk-forward placeholder](docs/images/walkforward.png)
 

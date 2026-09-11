@@ -6,6 +6,9 @@ rather than looking it up themselves, so tests can drive a page with a fixture.
 
 from __future__ import annotations
 
+import os
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -15,6 +18,7 @@ from tradingbot.analytics.metrics import PerformanceMetrics
 from tradingbot.backtest.runner import StoredRun
 from tradingbot.dashboard.compare import comparison_equity, headline_table
 from tradingbot.dashboard.session import day_of_week_chart, hour_of_day_chart
+from tradingbot.live.state import LiveStore
 from tradingbot.reporting.charts import build_charts
 from tradingbot.reporting.html_report import CARD_KEYS, charts_for_run, extras_for
 
@@ -133,6 +137,126 @@ def page_walkforward(run: StoredRun) -> None:
     st.plotly_chart(bundle.figures["walkforward"], use_container_width=True)
     st.plotly_chart(bundle.figures["montecarlo"], use_container_width=True)
     st.plotly_chart(bundle.figures["parameter_heatmap"], use_container_width=True)
+
+
+def page_live() -> None:
+    """Open positions, last processed bars and health of the running bot."""
+    st.caption("Refreshes about every 30 seconds.")
+
+    def _body() -> None:
+        _render_live()
+
+    fragment = getattr(st, "fragment", None)
+    if callable(fragment):
+        fragment(run_every=30)(_body)()
+    else:  # pragma: no cover - Streamlit < 1.33
+        _body()
+
+
+def _render_live() -> None:
+    path = Path(os.environ.get("TRADINGBOT_STATE_DB", "data/state.db"))
+    if not path.exists():
+        st.info(
+            f"No live state at `{path}`. Start the bot with `tradingbot live run --mode paper`."
+        )
+        return
+
+    status = LiveStore.from_path(path).read_status()
+    health = status.health
+    cards = st.columns(6)
+    cards[0].metric("Mode", health.mode)
+    cards[1].metric("Running", "yes" if health.running else "no")
+    cards[2].metric("Paused", "yes" if health.paused else "no")
+    cards[3].metric("Uptime", _fmt_uptime(status.uptime_sec))
+    cards[4].metric("Bars", f"{health.bars_processed:,}")
+    equity = status.latest_equity
+    cards[5].metric("Equity", f"{equity.equity:,.2f}" if equity is not None else "—")
+
+    if health.last_error:
+        st.error(health.last_error)
+    st.caption(
+        f"pid {health.pid or '—'} · started {_fmt_ts(health.started_at)} · "
+        f"last cycle {_fmt_ts(health.last_cycle_at)} · "
+        f"{status.pending_notifications} queued notifications"
+    )
+
+    st.subheader("Last processed bar")
+    if status.last_processed:
+        st.dataframe(
+            pd.DataFrame(
+                {
+                    "symbol": list(status.last_processed),
+                    "bar_ts": [ts.isoformat() for ts in status.last_processed.values()],
+                }
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
+    else:
+        st.info("No bars processed yet. The runner waits for the next candle close.")
+
+    st.subheader("Open positions")
+    if status.open_positions:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "symbol": pos.symbol,
+                        "side": pos.side.value,
+                        "size": pos.size,
+                        "entry": pos.entry_price,
+                        "stop": pos.current_stop,
+                        "entry_ts": pos.entry_ts.isoformat(),
+                    }
+                    for pos in status.open_positions
+                ]
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
+    else:
+        st.info("No open positions.")
+
+    st.subheader("Recent signals")
+    if status.recent_signals:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "bar_ts": row.bar_ts.isoformat(),
+                        "symbol": row.symbol,
+                        "type": row.signal_type,
+                        "side": row.side,
+                        "status": row.status,
+                        "reason": row.reason,
+                    }
+                    for row in status.recent_signals
+                ]
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
+    else:
+        st.info("No signals stored yet.")
+
+
+def _fmt_ts(value: datetime | None) -> str:
+    if value is None:
+        return "—"
+    return str(value)
+
+
+def _fmt_uptime(seconds: float | None) -> str:
+    if seconds is None or seconds < 0:
+        return "—"
+    total = int(seconds)
+    hours, rem = divmod(total, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
 
 
 def _display_trades(trades: pd.DataFrame) -> pd.DataFrame:

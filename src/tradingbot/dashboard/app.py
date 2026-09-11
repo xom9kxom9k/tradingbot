@@ -24,6 +24,7 @@ from tradingbot.dashboard.filters import (
 from tradingbot.dashboard.pages import (
     page_analytics,
     page_chart,
+    page_live,
     page_overview,
     page_trades,
     page_walkforward,
@@ -31,7 +32,7 @@ from tradingbot.dashboard.pages import (
 from tradingbot.reporting.html_report import load_prices
 from tradingbot.reporting.theme import install_template
 
-PAGES = ("Overview", "Trades", "Chart", "Analytics", "Walk-Forward")
+PAGES = ("Overview", "Trades", "Chart", "Analytics", "Walk-Forward", "Live")
 
 
 def run() -> None:
@@ -47,6 +48,7 @@ def run() -> None:
     if not runs:
         st.title("tradingbot")
         st.info(f"No runs in `{runs_dir}`. Run `tradingbot backtest run` first.")
+        page_live()
         return
 
     default = latest_run_id(runs_dir) or runs[0]
@@ -69,8 +71,10 @@ def run() -> None:
         page_chart(primary, trades, prices, symbol)
     elif page == "Analytics":
         page_analytics(primary, trades)
-    else:
+    elif page == "Walk-Forward":
         page_walkforward(primary)
+    else:
+        page_live()
 
 
 def _sidebar(
