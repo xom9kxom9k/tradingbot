@@ -26,6 +26,7 @@ def test_help_lists_command_groups() -> None:
         "live",
         "telegram",
         "dashboard",
+        "health",
     ):
         assert group in result.stdout
 
@@ -112,6 +113,24 @@ def test_dashboard_help() -> None:
     result = runner.invoke(app, ["dashboard", "--help"])
     assert result.exit_code == 0
     assert "Streamlit" in result.stdout or "dashboard" in result.stdout.lower()
+    assert "--address" in result.stdout
+
+
+def test_health_is_unhealthy_before_the_runner_starts(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["health", "--config", str(config_file(tmp_path))])
+    assert result.exit_code == 1
+    assert "not running" in result.output
+
+
+def test_health_ok_when_runner_is_marked_running(tmp_path: Path) -> None:
+    from tradingbot.config import load_config
+    from tradingbot.live.state import LiveHealth, LiveStore
+
+    path = config_file(tmp_path)
+    LiveStore.from_config(load_config([path])).save_health(LiveHealth(running=True))
+    result = runner.invoke(app, ["health", "--config", str(path)])
+    assert result.exit_code == 0
+    assert "ok" in result.stdout
 
 
 def test_live_run_help() -> None:

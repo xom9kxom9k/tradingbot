@@ -67,6 +67,7 @@ docker-build: ## Build the docker image
 	docker compose build
 
 docker-up: ## Start bot and dashboard containers
+	mkdir -p data runs logs
 	docker compose up -d
 
 clean: ## Remove caches and build artefacts

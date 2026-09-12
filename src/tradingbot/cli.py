@@ -99,6 +99,9 @@ def version() -> None:
 def dashboard(
     config: ConfigOption = None,
     port: Annotated[int, typer.Option("--port", help="Port for the Streamlit server.")] = 8501,
+    address: Annotated[
+        str, typer.Option("--address", help="Bind address; 0.0.0.0 inside Docker.")
+    ] = "localhost",
     headless: Annotated[
         bool, typer.Option("--headless", help="Do not open a browser window.")
     ] = False,
@@ -117,10 +120,26 @@ def dashboard(
         str(Path(dash_mod.__file__).resolve()),
         "--server.port",
         str(port),
+        "--server.address",
+        address,
     ]
     if headless:
         command.extend(["--server.headless", "true"])
     raise typer.Exit(subprocess.call(command))
+
+
+@app.command()
+def health(config: ConfigOption = None) -> None:
+    """Exit 0 when the live runner has marked itself running (Docker healthcheck)."""
+    from tradingbot.live.state import LiveStore
+
+    effective = build_config(config, quiet=True)
+    status = LiveStore.from_config(effective).read_status()
+    if status.health.running:
+        typer.echo("ok")
+        return
+    typer.secho("live runner is not running", fg=typer.colors.RED, err=True)
+    raise typer.Exit(code=1)
 
 
 @config_app.command("show")

@@ -1,0 +1,83 @@
+services:
+  bot:
+    build: .
+    image: tradingbot:local
+    command:
+      - live
+      - run
+      - --mode
+      - paper
+      - --config
+      - configs/base.yaml
+      - --config
+      - configs/strategy_donchian_trend.yaml
+      - --config
+      - configs/live.yaml
+    env_file:
+      - .env
+    environment:
+      TZ: UTC
+    volumes:
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./logs:/app/logs
+      - ./configs:/app/configs:ro
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "tradingbot",
+          "health",
+          "--config",
+          "configs/base.yaml",
+          "--config",
+          "configs/strategy_donchian_trend.yaml",
+          "--config",
+          "configs/live.yaml",
+        ]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 45s
+
+  dashboard:
+    build: .
+    image: tradingbot:local
+    command:
+      - dashboard
+      - --port
+      - "8501"
+      - --address
+      - "0.0.0.0"
+      - --headless
+      - --config
+      - configs/base.yaml
+      - --config
+      - configs/strategy_donchian_trend.yaml
+    env_file:
+      - .env
+    environment:
+      TZ: UTC
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./logs:/app/logs
+      - ./configs:/app/configs:ro
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s

@@ -67,6 +67,59 @@ make telegram-test              # проверить доставку
 make bot                        # paper-режим: сигналы уходят в Telegram
 ```
 
+## Развёртывание
+
+Один образ, два сервиса: `bot` (live/paper) и `dashboard` (порт 8501). Данные,
+прогоны и логи лежат в bind-mounts `data/`, `runs/`, `logs/` и переживают
+перезапуск контейнера.
+
+### Локально
+
+```bash
+cp .env.example .env            # токен и chat_id Telegram
+mkdir -p data runs logs
+make docker-build
+make docker-up                  # или: docker compose up -d
+```
+
+Дашборд: http://localhost:8501  
+Логи бота: `docker compose logs -f bot`
+
+Остановка: `docker compose down`. Состояние paper-бота остаётся в `data/state.db`.
+
+### VPS
+
+На чистой машине с Docker Engine и Docker Compose v2:
+
+```bash
+sudo apt-get update && sudo apt-get install -y git docker.io docker-compose-v2
+sudo usermod -aG docker "$USER"   # затем перелогиниться
+git clone https://github.com/xom9kxom9k/tradingbot.git
+cd tradingbot
+cp .env.example .env
+# заполнить TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_IDS
+mkdir -p data runs logs
+# контейнер работает от uid 1000 и пишет в эти каталоги
+sudo chown -R 1000:1000 data runs logs
+docker compose up -d --build
+```
+
+Секреты только в `.env`, в образ они не копируются.
+
+Откройте порт **8501** только для себя (firewall / SSH-туннель
+`ssh -L 8501:127.0.0.1:8501 user@vps`). Сам бот наружу портов не публикует.
+
+Обновление:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Первый старт без кэша OHLCV: бот подтянет свечи с биржи в `data/ohlcv`.
+На слабом VPS удобнее один раз сделать `make download` локально и скопировать
+`data/` на сервер.
+
 ## Разработка
 
 ```bash
