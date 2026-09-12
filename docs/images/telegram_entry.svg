@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="520" viewBox="0 0 720 520" role="img" aria-label="Telegram entry signal">
+  <rect width="720" height="520" fill="#0e1621"/>
+  <rect x="24" y="24" width="672" height="472" rx="16" fill="#182533"/>
+  <text x="48" y="64" fill="#6ab2f2" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">tradingbot</text>
+  <text x="48" y="108" fill="#e8f4ff" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">=â LONG  BTC/USDT (4h)</text>
+  <text x="48" y="156" fill="#d5e4f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">=µ E>4:        63 250.00</text>
+  <text x="48" y="184" fill="#d5e4f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">=Ñ !B>?:        61 100.00  (3.40% / 1R)</text>
+  <text x="48" y="212" fill="#d5e4f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15"><¯ TP1:         67 550.00  (+6.80% / 2R, 50%)</text>
+  <text x="48" y="240" fill="#d5e4f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">=æ 1JQ<:       0.1450 BTC  (H 9 171 USDT)</text>
+  <text x="48" y="268" fill="#d5e4f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">   8A::        1.00% :0?8B0;0  (100.00 USDT)</text>
+  <text x="48" y="312" fill="#d5e4f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">=Ê @8G8=0: ?@>1>9 Donchian-20 225@E</text>
+  <text x="48" y="340" fill="#9bb1c4" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">   "  568<: UP (EMA50 &gt; EMA200)</text>
+  <text x="48" y="368" fill="#9bb1c4" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">   " ADX(14): 27.4  e 20</text>
+  <text x="48" y="396" fill="#9bb1c4" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">   " ATR(14): 1 520.0  (2.40% >B F5=K)</text>
+  <text x="48" y="440" fill="#8aa0b3" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15">=P 0@: 2026-09-08 12:00 UTC (70:@KB)</text>
+  <text x="48" y="468" fill="#8aa0b3" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15"><” SIG-20260908-1200-BTCUSDT-L</text>
+</svg>
