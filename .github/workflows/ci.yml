@@ -31,11 +31,11 @@ jobs:
 
       - name: Lint
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
+          .venv/bin/ruff check .
+          .venv/bin/ruff format --check .
 
       - name: Typecheck
-        run: uv run mypy src/tradingbot
+        run: .venv/bin/mypy src/tradingbot
 
       - name: Tests
-        run: uv run pytest -m "not integration" --cov=src/tradingbot --cov-report=term-missing --cov-fail-under=80
+        run: .venv/bin/pytest -m "not integration" --cov=src/tradingbot --cov-report=term-missing --cov-fail-under=80
